@@ -27,7 +27,7 @@ services:
       - mongodb
 
   your-app:
-    build: .
+    image: my-app:v1.1
     ports:
       - "3000:3000"
     environment:
