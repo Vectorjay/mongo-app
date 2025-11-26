@@ -27,11 +27,11 @@ services:
       - mongodb
 
   your-app:
-    image: my-app:v1.1
+    build: .
     ports:
       - "3000:3000"
     environment:
-      MONGODB_URI: "mongodb://admin:password@mongodb:27017"
+      MONGODB_URI: "mongodb://admin:password@mongodb:27017/mydatabase"
     depends_on:
       - mongodb
 
