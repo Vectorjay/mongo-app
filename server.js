@@ -4,7 +4,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // MongoDB connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:password@localhost:27017/mydatabase';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:password@localhost:27017/mydatabase?authSource=admin';
 
 mongoose.connect(MONGODB_URI, {
   useNewUrlParser: true,
