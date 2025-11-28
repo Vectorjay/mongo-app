@@ -3,44 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MongoDB Item Manager</title>
+    <title>Item Manager - MongoDB CRUD App</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <h1>Item Manager</h1>
-        
-        <!-- Add/Edit Form -->
-        <div class="form-section">
-            <h2 id="form-title">Add New Item</h2>
-            <form id="itemForm">
-                <input type="hidden" id="itemId">
-                <div class="form-group">
-                    <label for="name">Name:</label>
-                    <input type="text" id="name" required>
-                </div>
-                <div class="form-group">
-                    <label for="description">Description:</label>
-                    <textarea id="description" required></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="quantity">Quantity:</label>
-                    <input type="number" id="quantity" value="0" min="0">
-                </div>
-                <div class="form-buttons">
-                    <button type="submit" id="submitBtn">Add Item</button>
-                    <button type="button" id="cancelBtn" style="display: none;">Cancel</button>
-                </div>
-            </form>
-        </div>
-
-        <!-- Items List -->
-        <div class="items-section">
-            <h2>Items List</h2>
-            <div id="itemsList"></div>
-        </div>
+<div class="container">
+    <div class="header">
+        <h1>🎯 Item Manager</h1>
+        <p>Manage your items with ease</p>
     </div>
 
-    <script src="script.js"></script>
+    <!-- Add/Edit Form -->
+    <div class="form-section slide-in">
+        <h2 id="form-title" class="form-title">Add New Item</h2>
+        <form id="itemForm">
+            <input type="hidden" id="itemId">
+            <div class="form-group">
+                <label for="name">Item Name:</label>
+                <input type="text" id="name" placeholder="Enter item name" required>
+            </div>
+            <div class="form-group">
+                <label for="description">Description:</label>
+                <textarea id="description" placeholder="Enter item description" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="quantity">Quantity:</label>
+                <input type="number" id="quantity" value="0" min="0" placeholder="Enter quantity">
+            </div>
+            <div class="form-buttons">
+                <button type="submit" id="submitBtn" class="btn btn-primary">
+                    <span>➕</span> Add Item
+                </button>
+                <button type="button" id="cancelBtn" class="btn btn-secondary" style="display: none;">
+                    <span>❌</span> Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Items List -->
+    <div class="items-section">
+        <h2 class="section-title">Your Items</h2>
+        <div id="itemsList">
+            <div class="loading"></div>
+        </div>
+    </div>
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>

@@ -1,238 +1,239 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
+const path = require('path');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// MongoDB connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:password@localhost:27017/mydatabase?authSource=admin';
+// Middleware
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log('Connected to MongoDB'))
-.catch(err => console.error('MongoDB connection error:', err));
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Mongoose Model for Items
+// MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://admin:password@mongodb:27017/simpleapp?authSource=admin';
+
+console.log('Attempting to connect to MongoDB...');
+
+const connectWithRetry = () => {
+    mongoose.connect(MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        serverSelectionTimeoutMS: 5000,
+    })
+        .then(() => {
+            console.log('✅ Connected to MongoDB successfully');
+        })
+        .catch((err) => {
+            console.error('❌ Failed to connect to MongoDB:', err.message);
+            console.log('🔄 Retrying connection in 5 seconds...');
+            setTimeout(connectWithRetry, 5000);
+        });
+};
+
+connectWithRetry();
+
+// Item Schema
 const itemSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true
-  },
-  description: String,
-  category: String,
-  price: Number,
-  isActive: {
-    type: Boolean,
-    default: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
-  }
+    name: {
+        type: String,
+        required: true
+    },
+    description: {
+        type: String,
+        required: true
+    },
+    quantity: {
+        type: Number,
+        default: 0
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    }
 });
 
 const Item = mongoose.model('Item', itemSchema);
 
-// Middleware
-app.use(express.json());
-app.use(express.static('public')); // Serve static files
+// Debug endpoint
+app.get('/api/debug', async (req, res) => {
+    try {
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        const itemCount = await Item.countDocuments();
+        const allItems = await Item.find().limit(5);
 
-// Serve a simple HTML frontend
+        res.json({
+            database: mongoose.connection.name,
+            connectionString: process.env.MONGODB_URI,
+            collections: collections.map(c => c.name),
+            itemCount: itemCount,
+            connectionState: mongoose.connection.readyState,
+            mongooseState: ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoose.connection.readyState],
+            sampleItems: allItems,
+            sampleItemIds: allItems.map(item => item._id)
+        });
+    } catch (error) {
+        res.json({ error: error.message });
+    }
+});
+
+// Serve main page
 app.get('/', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Item Manager</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .container { max-width: 800px; margin: 0 auto; }
-            .form { margin-bottom: 20px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
-            input, textarea { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 3px; }
-            button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 3px; cursor: pointer; }
-            button:hover { background: #0056b3; }
-            .item { border: 1px solid #eee; padding: 15px; margin: 10px 0; border-radius: 5px; }
-            .actions { margin-top: 10px; }
-            .delete { background: #dc3545; }
-            .delete:hover { background: #c82333; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>Item Manager</h1>
-            
-            <div class="form">
-                <h3>Add New Item</h3>
-                <input type="text" id="name" placeholder="Item Name" required>
-                <textarea id="description" placeholder="Description"></textarea>
-                <input type="text" id="category" placeholder="Category">
-                <input type="number" id="price" placeholder="Price" step="0.01">
-                <button onclick="addItem()">Add Item</button>
-            </div>
-
-            <div id="itemsList">
-                <h3>Items</h3>
-                <div id="itemsContainer"></div>
-            </div>
-        </div>
-
-        <script>
-            // Load items when page loads
-            loadItems();
-
-            async function loadItems() {
-                const response = await fetch('/api/items');
-                const items = await response.json();
-                const container = document.getElementById('itemsContainer');
-                
-                container.innerHTML = items.map(item => \`
-                    <div class="item" id="item-\${item._id}">
-                        <h4>\${item.name}</h4>
-                        <p>\${item.description || 'No description'}</p>
-                        <p><strong>Category:</strong> \${item.category || 'Uncategorized'} | 
-                           <strong>Price:</strong> $\${item.price || '0.00'}</p>
-                        <div class="actions">
-                            <button onclick="editItem('\${item._id}')">Edit</button>
-                            <button class="delete" onclick="deleteItem('\${item._id}')">Delete</button>
-                        </div>
-                    </div>
-                \`).join('');
-            }
-
-            async function addItem() {
-                const item = {
-                    name: document.getElementById('name').value,
-                    description: document.getElementById('description').value,
-                    category: document.getElementById('category').value,
-                    price: parseFloat(document.getElementById('price').value) || 0
-                };
-
-                const response = await fetch('/api/items', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(item)
-                });
-
-                if (response.ok) {
-                    // Clear form
-                    document.getElementById('name').value = '';
-                    document.getElementById('description').value = '';
-                    document.getElementById('category').value = '';
-                    document.getElementById('price').value = '';
-                    
-                    // Reload items
-                    loadItems();
-                }
-            }
-
-            async function deleteItem(id) {
-                if (confirm('Are you sure you want to delete this item?')) {
-                    await fetch(\`/api/items/\${id}\`, { method: 'DELETE' });
-                    loadItems();
-                }
-            }
-
-            async function editItem(id) {
-                const newName = prompt('Enter new name:');
-                if (newName) {
-                    await fetch(\`/api/items/\${id}\`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name: newName })
-                    });
-                    loadItems();
-                }
-            }
-        </script>
-    </body>
-    </html>
-  `);
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// API ROUTES
-
-// GET all items
+// Get all items
 app.get('/api/items', async (req, res) => {
-  try {
-    const items = await Item.find().sort({ createdAt: -1 });
-    res.json(items);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+    try {
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+        const items = await Item.find().sort({ createdAt: -1 });
+        console.log(`📋 Retrieved ${items.length} items from database`);
+        res.json(items);
+    } catch (error) {
+        console.error('Error fetching items:', error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
-// GET single item
+// Get single item - UPDATED WITH BETTER ERROR HANDLING
 app.get('/api/items/:id', async (req, res) => {
-  try {
-    const item = await Item.findById(req.params.id);
-    if (!item) {
-      return res.status(404).json({ error: 'Item not found' });
+    try {
+        console.log(`🔍 Looking for item with ID: ${req.params.id}`);
+
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+
+        // Validate if the ID is a valid MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            console.log('❌ Invalid item ID format:', req.params.id);
+            return res.status(400).json({ error: 'Invalid item ID format' });
+        }
+
+        const item = await Item.findById(req.params.id);
+
+        if (!item) {
+            console.log('❌ Item not found with ID:', req.params.id);
+
+            // Let's see what items actually exist for debugging
+            const allItems = await Item.find().select('_id name').limit(5);
+            console.log('📝 Available items:', allItems);
+
+            return res.status(404).json({
+                error: 'Item not found',
+                requestedId: req.params.id,
+                availableItems: allItems
+            });
+        }
+
+        console.log('✅ Item found:', item);
+        res.json(item);
+    } catch (error) {
+        console.error('❌ Error fetching item:', error);
+        res.status(500).json({ error: error.message });
     }
-    res.json(item);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 });
 
-// CREATE new item
+// Create new item
 app.post('/api/items', async (req, res) => {
-  try {
-    const item = new Item(req.body);
-    await item.save();
-    res.status(201).json(item);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
+    try {
+        console.log('📝 Received item creation request:', req.body);
+
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+
+        const { name, description, quantity } = req.body;
+        const newItem = new Item({
+            name,
+            description,
+            quantity: parseInt(quantity) || 0
+        });
+
+        console.log('💾 Attempting to save item:', newItem);
+
+        const savedItem = await newItem.save();
+        console.log('✅ Item saved successfully:', savedItem._id);
+
+        res.json(savedItem);
+    } catch (error) {
+        console.error('❌ Error saving item:', error);
+        res.status(400).json({ error: error.message });
+    }
 });
 
-// UPDATE item
+// Update item
 app.put('/api/items/:id', async (req, res) => {
-  try {
-    req.body.updatedAt = new Date();
-    const item = await Item.findByIdAndUpdate(
-      req.params.id, 
-      req.body, 
-      { new: true, runValidators: true }
-    );
-    
-    if (!item) {
-      return res.status(404).json({ error: 'Item not found' });
+    try {
+        console.log(`✏️ Updating item with ID: ${req.params.id}`);
+
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid item ID format' });
+        }
+
+        const { name, description, quantity } = req.body;
+        const updatedItem = await Item.findByIdAndUpdate(
+            req.params.id,
+            {
+                name,
+                description,
+                quantity: parseInt(quantity) || 0
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedItem) {
+            console.log('❌ Item not found for update:', req.params.id);
+            return res.status(404).json({ error: 'Item not found' });
+        }
+
+        console.log('✅ Item updated successfully:', updatedItem._id);
+        res.json(updatedItem);
+    } catch (error) {
+        console.error('❌ Error updating item:', error);
+        res.status(400).json({ error: error.message });
     }
-    
-    res.json(item);
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
 });
 
-// DELETE item
+// Delete item
 app.delete('/api/items/:id', async (req, res) => {
-  try {
-    const item = await Item.findByIdAndDelete(req.params.id);
-    
-    if (!item) {
-      return res.status(404).json({ error: 'Item not found' });
+    try {
+        console.log(`🗑️ Deleting item with ID: ${req.params.id}`);
+
+        if (mongoose.connection.readyState !== 1) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid item ID format' });
+        }
+
+        const deletedItem = await Item.findByIdAndDelete(req.params.id);
+        if (!deletedItem) {
+            console.log('❌ Item not found for deletion:', req.params.id);
+            return res.status(404).json({ error: 'Item not found' });
+        }
+
+        console.log('✅ Item deleted successfully:', req.params.id);
+        res.json({ message: 'Item deleted successfully' });
+    } catch (error) {
+        console.error('❌ Error deleting item:', error);
+        res.status(500).json({ error: error.message });
     }
-    
-    res.json({ message: 'Item deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 });
 
-// Health check
-app.get('/health', async (req, res) => {
-  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
-  
-  res.status(200).json({ 
-    status: 'OK', 
-    database: dbStatus,
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
+// Start server
+app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📊 Debug endpoint available at http://localhost:${PORT}/api/debug`);
 });

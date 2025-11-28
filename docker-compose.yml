@@ -1,4 +1,3 @@
-# docker-compose.yml
 version: '3.8'
 services:
   mongodb:
@@ -6,20 +5,36 @@ services:
     container_name: mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123  # Simple password
+      MONGO_INITDB_ROOT_PASSWORD: password
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
 
-  your-app:
-    build: .
-    ports:
-      - "3000:3000"
+  mongo-express:
+    image: mongo-express:latest
+    container_name: mongo-express
     environment:
-      MONGODB_URI: "mongodb://admin:password123@mongodb:27017/mydatabase?authSource=admin"
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: password
+      ME_CONFIG_MONGODB_URL: mongodb://admin:password@mongodb:27017/simpleapp?authSource=admin
+      ME_CONFIG_BASICAUTH: false
+    ports:
+      - "8081:8081"
     depends_on:
       - mongodb
+    command: ["/bin/sh", "-c", "sleep 10 && node app"]
+
+  app:
+    build: .
+    container_name: my-app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongodb
+    environment:
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017/simpleapp?authSource=admin
+    restart: unless-stopped
 
 volumes:
   mongodb_data:
